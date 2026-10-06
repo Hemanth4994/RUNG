@@ -1,0 +1,19 @@
+[project]
+name = "rung"
+version = "0.1.0"
+description = "Earned autonomy for AI agents: decide, per action category, what an agent has earned the right to do without a human."
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31"]
+
+[project.optional-dependencies]
+agent = ["langgraph", "langchain-core", "langsmith"]
+
+[project.scripts]
+rung = "rung.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
