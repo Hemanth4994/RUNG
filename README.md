@@ -26,10 +26,23 @@ python scripts/make_synthetic.py            # fake data, only to sanity-check th
 python -m rung.cli data/synthetic.jsonl
 ```
 
+## Pipeline commands
+```bash
+python -m rung.collect owner/repo --max-issues 500 --out data/issues.jsonl      # needs GITHUB_TOKEN
+python -m rung.shadow data/issues.jsonl --predictor baseline \
+    --out data/pred_baseline.jsonl --records data/records_baseline.jsonl        # no API key needed
+python -m rung.cli data/records_baseline.jsonl                                  # evidence + backtest report
+# LLM agent (needs provider key): pip install -e ".[agent]" ; export RUNG_MODEL="<provider>:<model>"
+python -m rung.shadow data/issues.jsonl --predictor llm \
+    --out data/pred_llm.jsonl --records data/records_llm.jsonl
+```
+
 ## Status
-- Tested (unit tests + synthetic data): stats, policy, backtest, label taxonomy, report CLI.
-- Written but **not yet run against live GitHub**: `rung.collect`.
-- Not built yet: the LangGraph triage agent, LangSmith tracing, human-approval interrupt step, report page.
+- Tested (16 unit tests): stats, policy, backtest, taxonomy, keyword baseline, shadow runner (resumable),
+  gate decision logic (fails closed), report CLI.
+- Written, **never run**: `rung.collect` (live GitHub), `rung.llm_classifier` (needs API key),
+  `rung.agent` (LangGraph graph; the sandbox it was written in could not install LangGraph).
+- Not built yet: LangSmith experiments/dataset, report page, deployment.
 
 ## Honest limitations
 - Maintainer labels are noisy ground truth, not perfect truth.

@@ -6,7 +6,7 @@ requires-python = ">=3.10"
 dependencies = ["requests>=2.31"]
 
 [project.optional-dependencies]
-agent = ["langgraph", "langchain-core", "langsmith"]
+agent = ["langgraph", "langchain", "langsmith", "pydantic"]
 
 [project.scripts]
 rung = "rung.cli:main"
