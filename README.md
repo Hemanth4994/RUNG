@@ -11,7 +11,7 @@ First benchmark: triaging GitHub issues (does the agent's proposed label match w
 
 ## How it works (v0)
 1. `rung.collect` pulls issues + maintainer-applied labels (the human decision) from public repos.
-2. A triage agent (LangGraph, next step) proposes a label per issue. Each outcome becomes a `Record`.
+2. A triage agent (LangGraph) proposes a label per issue. Each outcome becomes a `Record`.
 3. `rung.stats` computes per-category error with a Wilson upper bound.
 4. `rung.policy` promotes a category only if n >= min_n **and** upper bound <= max_error.
 5. `rung.backtest` decides using only past data and scores on future data. It reports coverage, realized error,
@@ -38,11 +38,9 @@ python -m rung.shadow data/issues.jsonl --predictor llm \
 ```
 
 ## Status
-- Tested (16 unit tests): stats, policy, backtest, taxonomy, keyword baseline, shadow runner (resumable),
-  gate decision logic (fails closed), report CLI.
-- Written, **never run**: `rung.collect` (live GitHub), `rung.llm_classifier` (needs API key),
-  `rung.agent` (LangGraph graph; the sandbox it was written in could not install LangGraph).
-- Not built yet: LangSmith experiments/dataset, report page, deployment.
+- Tested (23 unit tests): stats, policy, backtest, taxonomy, keyword baseline, shadow runner, gate logic, report CLI, and the agent graph (with a fake classifier).
+- Run end to end: the collector (live GitHub), the LLM classifier (Gemini Flash-Lite), and the LangGraph agent with human approval and LangSmith tracing.
+- Not built yet: LangSmith dataset and experiments, report page, deployment.
 
 ## Honest limitations
 - Maintainer labels are noisy ground truth, not perfect truth.
