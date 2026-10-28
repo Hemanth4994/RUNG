@@ -200,11 +200,48 @@ def walk_forward_predictions(issues: list[dict], n_blocks: int = 10, n_folds: in
             for i, d in enumerate(unique)]
 
 
+def _dedupe(issues: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    out = []
+    for issue in issues:
+        if issue["id"] not in seen:
+            seen.add(issue["id"])
+            out.append(issue)
+    return out
+
+
+def predict_with_training_set(train_issues: list[dict], test_issues: list[dict], seed: int = 0,
+                              trace: list | None = None) -> list[dict]:
+    """Fit ONCE on every trainable issue in ``train_issues`` and predict each unique test issue.
+
+    Use this for a holdout: train on the development issues, predict repos the model has never
+    seen. Any id present in both lists is removed from training, so a test issue can never be
+    trained on. Output rows use the shadow schema, in time order.
+    """
+    test = sorted(_dedupe(test_issues), key=lambda d: _ts(d["created_at"]))
+    test_ids = {d["id"] for d in test}
+    train = [d for d in _dedupe(train_issues) if d["id"] not in test_ids and _single_label(d) is not None]
+    preds = _fit_predict([_text(d) for d in train], [_single_label(d) for d in train],
+                         [_text(d) for d in test], seed)
+    if trace is not None:
+        trace.append({"mode": "holdout", "train_ids": [d["id"] for d in train],
+                      "predict_ids": [d["id"] for d in test]})
+    return [{"id": d["id"], "created_at": d["created_at"], "predicted": p,
+             "human_labels": list(d.get("human_labels") or [])} for d, p in zip(test, preds)]
+
+
 def run(issues_path: str, out_path: str, records_path: str, n_blocks: int = 10,
-        n_folds: int = 5, seed: int = 0) -> int:
-    """Load issues, write predictions (overwrite) and records. Returns number of predictions."""
-    rows = walk_forward_predictions(load_issues(issues_path), n_blocks=n_blocks,
-                                    n_folds=n_folds, seed=seed)
+        n_folds: int = 5, seed: int = 0, train_on: str | None = None) -> int:
+    """Load issues, write predictions (overwrite) and records. Returns number of predictions.
+
+    With ``train_on`` (a development issues file) the model is fit once on that file and predicts
+    ``issues_path`` (a holdout); otherwise predictions are walk-forward inside ``issues_path``.
+    """
+    if train_on:
+        rows = predict_with_training_set(load_issues(train_on), load_issues(issues_path), seed=seed)
+    else:
+        rows = walk_forward_predictions(load_issues(issues_path), n_blocks=n_blocks,
+                                        n_folds=n_folds, seed=seed)
     for path in (out_path, records_path):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
@@ -220,8 +257,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--out", required=True, help="predictions JSONL (overwritten)")
     ap.add_argument("--records", required=True, help="records JSONL for `python -m rung.cli`")
     ap.add_argument("--blocks", type=int, default=10)
+    ap.add_argument("--train-on", default=None,
+                    help="development issues JSONL: fit once on it and predict `issues` (holdout mode)")
     args = ap.parse_args(argv)
-    n = run(args.issues, args.out, args.records, n_blocks=args.blocks)
+    n = run(args.issues, args.out, args.records, n_blocks=args.blocks, train_on=args.train_on)
     print(f"{n} predictions -> {args.out}, {args.records}")
 
 

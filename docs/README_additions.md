@@ -31,12 +31,36 @@ results (including heavily tied timestamps and the float edge in the 60% cut). `
 predictor to the issue ids they all share, so a few extra rows in one run cannot skew the comparison.
 `quality` reports duplicates, missing fields, per-repo counts and which ids are missing from each prediction file.
 
-## Holdout protocol
-1. Tag the frozen settings.
-2. Collect 2 repos not used before (about 500 issues in total).
-3. Run each predictor once with the frozen settings. Do not tune anything afterwards.
-4. Report the holdout table next to the development results, including failures.
-5. Read 20-30 wrong predictions by hand and tag each: ambiguous label, maintainer inconsistency, or real miss.
+## Holdout protocol (PowerShell)
+Development files (already made): `data/all_issues.jsonl` and the dev records of each predictor
+(`data/records_baseline.jsonl`, `data/records_ml.jsonl`, `data/records_llm.jsonl`; use your own names).
+The policy is decided from the dev records only. Holdout repos are scored once and never used to choose anything.
+
+```powershell
+# 1. freeze the settings first
+git tag frozen-v1 ; git push origin frozen-v1
+
+# 2. collect 2 NEW repos into a SEPARATE file (about 250 issues each). Collect each repo once.
+python -m rung.collect OWNER/REPO1 --max-issues 250 --out data/holdout_issues.jsonl
+python -m rung.collect OWNER/REPO2 --max-issues 250 --out data/holdout_issues.jsonl
+
+# 3. each predictor runs once on the holdout
+python -m rung.shadow data/holdout_issues.jsonl --predictor baseline --out data/hold_pred_kw.jsonl --records data/hold_rec_kw.jsonl
+python -m rung.baseline_ml data/holdout_issues.jsonl --train-on data/all_issues.jsonl --out data/hold_pred_ml.jsonl --records data/hold_rec_ml.jsonl
+python -m rung.shadow data/holdout_issues.jsonl --predictor llm --out data/hold_pred_llm.jsonl --records data/hold_rec_llm.jsonl
+
+# 4. apply the frozen dev policy to each holdout
+python -m rung.holdout data/records_baseline.jsonl data/hold_rec_kw.jsonl
+python -m rung.holdout data/records_ml.jsonl data/hold_rec_ml.jsonl
+python -m rung.holdout data/records_llm.jsonl data/hold_rec_llm.jsonl
+```
+Notes
+- Pick holdout repos whose labels map to bug / feature / question / docs. Check the collector's "wrote N issues" line.
+- `--train-on` fits the trained baseline once on the dev issues and predicts repos it has never seen.
+- The free Gemini tier allows about 500 requests a day. Use `--limit` and rerun the same command next day: runs resume.
+- `gemini-flash-lite-latest` is a floating alias; write down the date of the holdout run.
+- Save each report to `results/` and commit it, including bad results.
+- Read 20-30 wrong holdout predictions by hand and tag each: ambiguous label, maintainer inconsistency, or real miss.
 
 ## Update to the Limitations list
 - Replace the "Weak baseline" bullet with: "A trained TF-IDF + logistic-regression baseline (walk-forward,
