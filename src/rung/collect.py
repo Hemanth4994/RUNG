@@ -53,6 +53,14 @@ def fetch_issues(repo: str, max_issues: int, token: str | None = None):
         page += 1
 
 
+def existing_ids(path: str) -> set[str]:
+    """Ids already saved in `path` (empty set if the file does not exist yet)."""
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {json.loads(line)["id"] for line in f if line.strip()}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("repo")
@@ -60,12 +68,17 @@ def main() -> None:
     ap.add_argument("--out", default="data/issues.jsonl")
     args = ap.parse_args()
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    seen = existing_ids(args.out)   # re-running the collector must not append the same issue twice
     with open(args.out, "a", encoding="utf-8") as f:
-        n = 0
+        n = skipped = 0
         for row in fetch_issues(args.repo, args.max_issues, os.environ.get("GITHUB_TOKEN")):
+            if row["id"] in seen:
+                skipped += 1
+                continue
+            seen.add(row["id"])
             f.write(json.dumps(row) + "\n")
             n += 1
-    print(f"wrote {n} issues from {args.repo} to {args.out}")
+    print(f"wrote {n} new issues from {args.repo} to {args.out} ({skipped} already present)")
 
 
 if __name__ == "__main__":

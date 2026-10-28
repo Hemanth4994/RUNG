@@ -47,6 +47,7 @@ def run_shadow(issues: Iterable[dict], predict: Predictor, out_path: str, limit:
             f.write(json.dumps({"id": issue["id"], "created_at": issue["created_at"],
                                 "predicted": pred, "human_labels": issue["human_labels"]}) + "\n")
             f.flush()
+            done.add(issue["id"])   # an id repeated later in `issues` must not be predicted (and paid for) twice
             new += 1
     return new
 
@@ -54,11 +55,15 @@ def run_shadow(issues: Iterable[dict], predict: Predictor, out_path: str, limit:
 def predictions_to_records(path: str) -> list[Record]:
     """Category = what the agent proposed. Correct = the maintainers also applied that label."""
     recs = []
+    seen: set[str] = set()   # duplicate rows would inflate n and make the Wilson bound look tighter than it is
     with open(path, encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
             d = json.loads(line)
+            if d["id"] in seen:
+                continue
+            seen.add(d["id"])
             pred = d["predicted"] if d["predicted"] in COARSE else "invalid"
             recs.append(Record(
                 id=d["id"],
