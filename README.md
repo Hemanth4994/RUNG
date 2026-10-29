@@ -100,7 +100,7 @@ Notes
 - Read 20-30 wrong holdout predictions by hand and tag each: ambiguous label, maintainer inconsistency, or real miss.
 
 ## Status
-- Tested (72 unit tests): stats, policy, backtest, taxonomy, keyword baseline, walk-forward trained baseline, shadow runner with dedup, gate logic, report CLI, the agent graph (fake classifier), the DuckDB SQL layer (checked for parity with the Python numbers) and the holdout scorer.
+- Tested (74 unit tests): stats, policy, backtest, taxonomy, keyword baseline, walk-forward trained baseline, shadow runner with dedup, gate logic, report CLI, the agent graph (fake classifier), the DuckDB SQL layer (checked for parity with the Python numbers) and the holdout scorer.
 - Run end to end: the collector (live GitHub), the LLM classifier (Gemini Flash-Lite), and the LangGraph agent with human approval and LangSmith tracing.
 - Not built yet: LangSmith dataset and experiments, report page, deployment.
 
@@ -147,15 +147,55 @@ Share of later issues handled automatically, and the error rate on those issues:
 
 The keyword baseline never earned autonomy in any category at any limit up to 15%. The LLM earned it for one category at 5% and for three at 15%. Realized error stays below the limit in every row because the policy decides on an upper bound, not on the observed rate. Full reports are in `results/`.
 
+### Holdout: two unseen repos
+
+The settings (5% limit, at least 30 cases, one-sided 95% Wilson bound) were frozen in git tag `frozen-v1` before any holdout issue was scored. The policy is decided from development records only (pytest, flask, pandas, scikit-learn). It is then applied to 500 issues from two repos the policy never saw: matplotlib and numpy. Gemini ran on 29 Oct 2026; the model that answered, `gemini-3.5-flash-lite` (behind the alias `gemini-flash-lite-latest`), is recorded in `results/holdout_llm_model.jsonl`.
+
+| Category | Dev error | Tier (decided on dev) | Holdout cases | Holdout errors | Holdout error | Holdout upper bound |
+|---|---|---|---|---|---|---|
+| docs | 1.8% | **auto** | 103 | 3 | 2.9% | 7.1% |
+| bug | 7.2% | review | 268 | 45 | 16.8% | 20.9% |
+| feature | 10.7% | review | 123 | 17 | 13.8% | 19.7% |
+| question | 54.5% | review | 6 | 2 | 33.3% | 65.3% |
+
+- **What the gate did.** `docs` was the only promoted category. It handled 103 of 500 issues (20.6%) with no human, and 3 were wrong (2.9%), within the 5% limit. The dev backtest had predicted 19.5% coverage at 2.3% error.
+- **What it prevented.** Applying the agent's label to every issue would have mislabelled 67 of 500 (13.4%). With the gate, 3 of 500 (0.6%) reached the repo wrong without a human, and 397 went to review.
+- **Why `bug` stayed in review.** Its error rose from 7.2% on the dev repos to 16.8% on the new ones. Review was the right tier.
+- **Baselines.** The keyword baseline and the trained TF-IDF classifier promoted nothing at 5% on the holdout (0% coverage). See `results/holdout_keyword.txt` and `results/holdout_trained.txt`.
+- **Not proof.** `docs` rests on 103 cases and 3 errors. On the holdout alone its 95% upper bound is 7.1%, so the honest statement is "stayed within the limit on 103 unseen issues", not "guaranteed under 5%".
+
+**Sensitivity check, run after seeing the holdout (not a setting I chose in advance).** Loosening the limit buys coverage and costs error:
+
+| Limit | Promoted | Holdout coverage | Realized error on auto-handled | False promotions |
+|---|---|---|---|---|
+| 5% (frozen) | docs | 20.6% (103 of 500) | 2.9% (3 wrong) | none |
+| 10% (post hoc) | docs, bug | 74.2% (371 of 500) | 12.9% (48 wrong) | bug |
+
+At 10%, `bug` looked safe on the dev repos (upper bound 8.7%) and then ran at 16.8% on new repos. The Wilson bound accounts for sampling noise. It does not account for a change of repo.
+
+**What the 67 errors were.** I read each one (title and a short excerpt) and tagged it; the full list is in `results/holdout_llm_failure_analysis.md`. These tags are provisional, and ten are flagged for a check against the full thread.
+
+| Tag | Cases |
+|---|---|
+| outcome-only (label reflects what happened after filing) | 42 |
+| ambiguous label (or no fitting class, e.g. performance) | 17 |
+| real miss (answer visible in the excerpt) | 5 |
+| maintainer inconsistency | 3 |
+
+The largest single pattern is 30 issues filed with a `[Bug]` template that maintainers handled as support questions. The three errors on the auto-handled `docs` category were all title-prefix versus label disagreements, not obvious content mistakes.
+
 ### Limitations
 
 - **Ground truth is noisy.** Maintainer labels follow each repo's own conventions, so "error" means disagreement with a maintainer, not objective wrongness.
 - **Small counts.** The 19.5% coverage figure rests on roughly 130 later `docs` issues and about 3 errors, so it carries wide uncertainty. `question` has only 22 cases.
 - **Narrow data.** Four Python libraries only; results may not transfer to other projects.
 - **Model input is limited.** The model sees the title and the first 1,500 characters of the body, and must pick one of four labels even when none fits.
-- **Floating model alias.** `gemini-flash-lite-latest` can change over time, so rerunning later may give different numbers.
+- **Floating model alias.** `gemini-flash-lite-latest` moves over time. The holdout ran on `gemini-3.5-flash-lite` (recorded). I don't know which model the alias pointed to during the 18-21 Oct dev run, so dev and holdout may differ in model as well as in repo.
+- **Cross-repo shift.** The policy is built on four Python libraries and tested on two others. The bug error more than doubled between them, and a sampling bound cannot see that. A new repo needs its own shadow period before anything is promoted.
+- **Labels follow triage outcomes.** Many maintainer labels (especially support versus bug) are applied after someone investigates. The agent sees only the issue text, so some "errors" cannot be decided from the input.
+- **Thin holdout cells.** The single promoted category has 103 holdout cases and 3 errors, and `question` has 6 cases.
 - **Baselines.** A keyword rule and a trained TF-IDF + logistic-regression classifier (walk-forward, leakage-free) are compared against the LLM; see the holdout results.
-- **Dedup mismatch.** Two de-duplication counts differ by 5 rows (1,674 vs 1,679); I haven't traced the cause.
+- **Dev record counts differ by predictor** (keyword 1,793, trained baseline 1,674, Gemini 1,679). I haven't traced the cause. Each predictor's policy is built from its own records.
 
 ### Agent
 
