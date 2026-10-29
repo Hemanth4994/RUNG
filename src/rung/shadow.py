@@ -32,8 +32,12 @@ def _done_ids(out_path: str) -> set[str]:
         return {json.loads(line)["id"] for line in f if line.strip()}
 
 
-def run_shadow(issues: Iterable[dict], predict: Predictor, out_path: str, limit: int | None = None) -> int:
-    """Predict for each issue not already in out_path. Returns number of new predictions."""
+def run_shadow(issues: Iterable[dict], predict: Predictor, out_path: str, limit: int | None = None,
+               progress_every: int = 0) -> int:
+    """Predict for each issue not already in out_path. Returns number of new predictions.
+
+    progress_every > 0 prints a line every that many new predictions (slow, paced LLM runs).
+    """
     done = _done_ids(out_path)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     new = 0
@@ -49,6 +53,8 @@ def run_shadow(issues: Iterable[dict], predict: Predictor, out_path: str, limit:
             f.flush()
             done.add(issue["id"])   # an id repeated later in `issues` must not be predicted (and paid for) twice
             new += 1
+            if progress_every and new % progress_every == 0:
+                print(f"  {new} new predictions so far ({len(done)} issues done)", flush=True)
     return new
 
 
@@ -84,19 +90,49 @@ def _get_predictor(name: str) -> Predictor:
     raise SystemExit(f"unknown predictor: {name}")
 
 
+def _record_model(out_path: str) -> None:
+    """Write down which concrete model answered (floating aliases move), one line per invocation."""
+    from datetime import timezone
+    from .llm_classifier import resolve_model
+
+    info = resolve_model()
+    info["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with open(out_path + ".meta.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(info) + "\n")
+    print(f"model: requested={info['requested']!r} resolved={info.get('resolved')!r}")
+
+
 def main() -> None:
+    from .throttle import DailyQuotaExhausted, throttled
+
     ap = argparse.ArgumentParser()
     ap.add_argument("issues")
     ap.add_argument("--predictor", choices=["baseline", "llm"], default="baseline")
     ap.add_argument("--out", required=True, help="predictions JSONL (resumable)")
     ap.add_argument("--records", required=True, help="records JSONL for `python -m rung.cli`")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--min-interval", type=float, default=None,
+                    help="seconds between model calls (default: 4.5 for llm = under 15 requests/min, 0 for baseline)")
+    ap.add_argument("--max-retries", type=int, default=6, help="retries per issue on a rate-limit error")
     args = ap.parse_args()
 
-    new = run_shadow(load_issues(args.issues), _get_predictor(args.predictor), args.out, args.limit)
+    issues = load_issues(args.issues)
+    predict = _get_predictor(args.predictor)
+    interval = args.min_interval if args.min_interval is not None else (4.5 if args.predictor == "llm" else 0.0)
+    if args.predictor == "llm":
+        _record_model(args.out)
+    predict = throttled(predict, min_interval=interval, max_retries=args.max_retries)
+
+    try:
+        new = run_shadow(issues, predict, args.out, args.limit, progress_every=25 if args.predictor == "llm" else 0)
+    except DailyQuotaExhausted as exc:
+        done = len(_done_ids(args.out))
+        print(f"\nStopped: {exc}.\n{done} of {len(issues)} issues are predicted and saved in {args.out}. "
+              "Records were NOT written; rerun the same command to resume.")
+        raise SystemExit(2)
     recs = predictions_to_records(args.out)
     save_records(args.records, recs)
-    print(f"{new} new predictions; {len(recs)} total records -> {args.records}")
+    print(f"{new} new predictions; {len(recs)} total records -> {args.records} ({len(recs)} of {len(issues)} issues)")
 
 
 if __name__ == "__main__":

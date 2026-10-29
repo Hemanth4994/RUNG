@@ -35,3 +35,22 @@ def make_predictor():
         return out.label
 
     return predict
+
+
+def resolve_model() -> dict:
+    """Which concrete model is behind RUNG_MODEL right now? One cheap call, recorded next to the run.
+
+    Floating aliases such as `gemini-flash-lite-latest` move over time, so a result is only
+    reproducible if the model that really answered is written down.
+    """
+    from langchain.chat_models import init_chat_model
+
+    requested = os.environ.get("RUNG_MODEL", "")
+    info: dict = {"requested": requested}
+    try:
+        meta = init_chat_model(requested, temperature=0).invoke("Reply with OK").response_metadata or {}
+        info["resolved"] = meta.get("model_version") or meta.get("model_name") or meta.get("model")
+    except Exception as exc:   # recording the model must never stop the run itself
+        info["resolved"] = None
+        info["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+    return info

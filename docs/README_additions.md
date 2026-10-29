@@ -57,8 +57,8 @@ python -m rung.holdout data/records_llm.jsonl data/hold_rec_llm.jsonl
 Notes
 - Pick holdout repos whose labels map to bug / feature / question / docs. Check the collector's "wrote N issues" line.
 - `--train-on` fits the trained baseline once on the dev issues and predicts repos it has never seen.
-- The free Gemini tier allows about 500 requests a day. Use `--limit` and rerun the same command next day: runs resume.
-- `gemini-flash-lite-latest` is a floating alias; write down the date of the holdout run.
+- The free Gemini tier limits requests per minute (15 on `gemini-3.5-flash-lite` when I ran it) and per day. The runner now paces itself (4.5 s between calls, `--min-interval` to change), waits and retries the same issue on a per-minute 429, and stops cleanly on a per-day limit without writing records. Rerun the same command and it resumes.
+- `gemini-flash-lite-latest` is a floating alias. Each LLM run appends the model that actually answered to `<out>.meta.jsonl`; keep that file with the results.
 - Save each report to `results/` and commit it, including bad results.
 - Read 20-30 wrong holdout predictions by hand and tag each: ambiguous label, maintainer inconsistency, or real miss.
 
