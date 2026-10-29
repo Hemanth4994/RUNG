@@ -100,7 +100,7 @@ Notes
 - Read 20-30 wrong holdout predictions by hand and tag each: ambiguous label, maintainer inconsistency, or real miss.
 
 ## Status
-- Tested (74 unit tests): stats, policy, backtest, taxonomy, keyword baseline, walk-forward trained baseline, shadow runner with dedup, gate logic, report CLI, the agent graph (fake classifier), the DuckDB SQL layer (checked for parity with the Python numbers) and the holdout scorer.
+- Tested (78 unit tests): stats, policy, backtest, taxonomy, keyword baseline, walk-forward trained baseline, shadow runner with dedup, gate logic, report CLI, the agent graph (fake classifier), the DuckDB SQL layer (checked for parity with the Python numbers) and the holdout scorer.
 - Run end to end: the collector (live GitHub), the LLM classifier (Gemini Flash-Lite), and the LangGraph agent with human approval and LangSmith tracing.
 - Not built yet: LangSmith dataset and experiments, report page, deployment.
 
