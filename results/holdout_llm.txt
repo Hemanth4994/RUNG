@@ -1,0 +1,10 @@
+﻿policy from 1679 dev records (error <= 5%, min n = 30); scored on 500 holdout records
+category          tier      dev n  dev err%  dev upper%  hold n hold err hold err%
+label:bug         review      941       7.2         8.7     268       45      16.8
+label:docs        auto        398       1.8         3.2     103        3       2.9
+label:feature     review      318      10.7        13.9     123       17      13.8
+label:question    review       22      54.5        70.5       6        2      33.3
+
+promoted: ['label:docs']
+holdout coverage: 20.6% (103 of 500), realized error on auto-handled: 2.9% (3 wrong)
+false promotions: none

@@ -1,0 +1,2 @@
+{"requested": "google_genai:gemini-flash-lite-latest", "resolved": "gemini-3.5-flash-lite", "utc": "2026-10-29T08:42:49+00:00"}
+{"requested": "google_genai:gemini-flash-lite-latest", "resolved": null, "error": "GoogleInvalidRequestError: Error calling model 'gemini-flash-lite-latest' (INVALID_ARGUMENT): 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUME", "utc": "2026-10-29T11:53:53+00:00"}
