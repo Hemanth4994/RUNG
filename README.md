@@ -111,27 +111,41 @@ Notes
 
 ## Results (v0)
 
-**Setup.** Issues from four public repos (pytest, flask, pandas, scikit-learn), about 1,680 after removing rows that were collected twice. The "human decision" is the label the maintainers applied, mapped to four categories: bug, feature, question, docs. A predictor proposes one label per issue; an error means it disagreed with the maintainers. The policy promotes a category to `auto` only if it has at least 30 cases and the one-sided 95% Wilson upper bound on its error rate is at most the limit (here 5%).
+**Setup.** Issues from four public repos (pytest, flask, pandas, scikit-learn), 1,674 unique issues. The raw file had 119 rows collected twice; I removed them after the holdout run (see Limitations). The "human decision" is the label the maintainers applied, mapped to four categories: bug, feature, question, docs. A predictor proposes one label per issue; an error means it disagreed with the maintainers. The policy promotes a category to `auto` only if it has at least 30 cases and the one-sided 95% Wilson upper bound on its error rate is at most the limit (here 5%).
 
-Two predictors were compared:
+Three predictors were compared:
 
 - **Keyword baseline**: a plain keyword classifier, no API key.
+- **Trained baseline**: TF-IDF plus logistic regression, trained walk-forward so it never sees the future.
 - **LLM**: Gemini Flash-Lite (`gemini-flash-lite-latest`, temperature 0, structured output), run 18-21 Oct 2026.
 
 ### LLM, per category (all issues, 5% limit)
 
 | Category | Cases | Errors | Error | Upper bound | Tier |
 |---|---|---|---|---|---|
-| docs | 398 | 7 | 1.8% | 3.2% | **auto** |
-| bug | 941 | 68 | 7.2% | 8.7% | review |
+| docs | 394 | 7 | 1.8% | 3.2% | **auto** |
+| bug | 940 | 68 | 7.2% | 8.8% | review |
 | feature | 318 | 34 | 10.7% | 13.9% | review |
 | question | 22 | 12 | 54.5% | 70.5% | review |
+
+### Dev error by predictor (same 1,674 issues)
+
+For each predictor, the share of its proposals for a label that the maintainers did not apply. A dash means the predictor never proposed that label.
+
+| Proposed label | Keyword | Trained | LLM |
+|---|---|---|---|
+| bug | 30.1% | 7.2% | 7.2% |
+| docs | 62.8% | 32.7% | 1.8% |
+| feature | 16.7% | 6.4% | 10.7% |
+| question | 87.2% | - | 54.5% |
+
+The LLM's advantage is concentrated in `docs`. The trained baseline is better on `feature` but still above the 5% limit everywhere, so only the LLM earned a promotion.
 
 ### Backtest
 
 The policy is decided on the earliest 60% of issues (by timestamp) and scored on the latest 40%.
 
-- At a 5% limit, `docs` is promoted. On the later issues it handles **19.5% of cases automatically at 2.3% realized error**, with no false promotions.
+- At a 5% limit, `docs` is promoted. On the later issues it handles **19.0% of cases automatically at 2.4% realized error**, with no false promotions.
 - An expanding-window check (4 folds) found no fold with a false promotion.
 
 ### Coverage versus risk
@@ -141,8 +155,8 @@ Share of later issues handled automatically, and the error rate on those issues:
 | Error limit | Keyword baseline | LLM |
 |---|---|---|
 | 2% | 0.0% coverage | 0.0% coverage |
-| 5% | 0.0% coverage | 19.5% coverage, 2.3% error |
-| 10% | 0.0% coverage | 19.5% coverage, 2.3% error |
+| 5% | 0.0% coverage | 19.0% coverage, 2.4% error |
+| 10% | 0.0% coverage | 19.0% coverage, 2.4% error |
 | 15% | 0.0% coverage | 82.1% coverage, 4.2% error |
 
 The keyword baseline never earned autonomy in any category at any limit up to 15%. The LLM earned it for one category at 5% and for three at 15%. Realized error stays below the limit in every row because the policy decides on an upper bound, not on the observed rate. Full reports are in `results/`.
@@ -158,10 +172,10 @@ The settings (5% limit, at least 30 cases, one-sided 95% Wilson bound) were froz
 | feature | 10.7% | review | 123 | 17 | 13.8% | 19.7% |
 | question | 54.5% | review | 6 | 2 | 33.3% | 65.3% |
 
-- **What the gate did.** `docs` was the only promoted category. It handled 103 of 500 issues (20.6%) with no human, and 3 were wrong (2.9%), within the 5% limit. The dev backtest had predicted 19.5% coverage at 2.3% error.
+- **What the gate did.** `docs` was the only promoted category. It handled 103 of 500 issues (20.6%) with no human, and 3 were wrong (2.9%), within the 5% limit. The dev backtest had predicted 19.0% coverage at 2.4% error.
 - **What it prevented.** Applying the agent's label to every issue would have mislabelled 67 of 500 (13.4%). With the gate, 3 of 500 (0.6%) reached the repo wrong without a human, and 397 went to review.
 - **Why `bug` stayed in review.** Its error rose from 7.2% on the dev repos to 16.8% on the new ones. Review was the right tier.
-- **Baselines.** The keyword baseline and the trained TF-IDF classifier promoted nothing at 5% on the holdout (0% coverage). See `results/holdout_keyword.txt` and `results/holdout_trained.txt`.
+- **Baselines.** The keyword baseline and the trained classifier promoted nothing at 5% on the holdout (0% coverage). Their holdout error by proposed label: keyword bug 34.2%, docs 25.2%, feature 20.0%, question 86.7%; trained bug 28.0%, docs 23.3%, feature 12.5% (it never proposed `question`). See `results/holdout_keyword.txt` and `results/holdout_trained.txt`.
 - **Not proof.** `docs` rests on 103 cases and 3 errors. On the holdout alone its 95% upper bound is 7.1%, so the honest statement is "stayed within the limit on 103 unseen issues", not "guaranteed under 5%".
 
 **Sensitivity check, run after seeing the holdout (not a setting I chose in advance).** Loosening the limit buys coverage and costs error:
@@ -187,7 +201,7 @@ The largest single pattern is 30 issues filed with a `[Bug]` template that maint
 ### Limitations
 
 - **Ground truth is noisy.** Maintainer labels follow each repo's own conventions, so "error" means disagreement with a maintainer, not objective wrongness.
-- **Small counts.** The 19.5% coverage figure rests on roughly 130 later `docs` issues and about 3 errors, so it carries wide uncertainty. `question` has only 22 cases.
+- **Small counts.** The 19.0% coverage figure rests on roughly 130 later `docs` issues and about 3 errors, so it carries wide uncertainty. `question` has only 22 cases.
 - **Narrow data.** Four Python libraries only; results may not transfer to other projects.
 - **Model input is limited.** The model sees the title and the first 1,500 characters of the body, and must pick one of four labels even when none fits.
 - **Floating model alias.** `gemini-flash-lite-latest` moves over time. The holdout ran on `gemini-3.5-flash-lite` (recorded). I don't know which model the alias pointed to during the 18-21 Oct dev run, so dev and holdout may differ in model as well as in repo.
@@ -195,7 +209,7 @@ The largest single pattern is 30 issues filed with a `[Bug]` template that maint
 - **Labels follow triage outcomes.** Many maintainer labels (especially support versus bug) are applied after someone investigates. The agent sees only the issue text, so some "errors" cannot be decided from the input.
 - **Thin holdout cells.** The single promoted category has 103 holdout cases and 3 errors, and `question` has 6 cases.
 - **Baselines.** A keyword rule and a trained TF-IDF + logistic-regression classifier (walk-forward, leakage-free) are compared against the LLM; see the holdout results.
-- **Dev record counts differ by predictor** (keyword 1,793, trained baseline 1,674, Gemini 1,679). I haven't traced the cause. Each predictor's policy is built from its own records.
+- **Duplicate rows in the dev data (fixed).** `all_issues.jsonl` had 1,793 rows for 1,674 unique issues (119 collected twice). The keyword records carried all 119 repeats and the Gemini records carried 5 (4 docs, 1 bug, all correct). I removed them after the holdout run with `scripts/dedup_jsonl.py`, which keeps the original files. No tier changed, Gemini's holdout numbers were identical before and after, and the keyword baseline still promotes nothing. The trained baseline's records already had one row per issue.
 
 ### Agent
 
