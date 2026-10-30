@@ -9,6 +9,8 @@ decision with a time-ordered backtest.
 
 First benchmark: triaging GitHub issues (does the agent's proposed label match what maintainers applied?).
 
+**Result.** I froze the settings in git, then tested on 500 issues from two repos the policy had never seen (matplotlib and numpy). Only `docs` earned autonomy. It handled 20.6% of issues with no human at 2.9% error (3 wrong of 103), where applying the agent's labels everywhere would have been 13.4% wrong. `bug` stayed in review, and its error rose from 7.2% on the development repos to 16.8% on the new ones. Loosening the limit to 10% (a check run after seeing the results) would have promoted `bug` and produced 12.9% realized error. The sections below give the tables, an analysis of all 67 errors, and the limitations.
+
 ## How it works (v0)
 1. `rung.collect` pulls issues + maintainer-applied labels (the human decision) from public repos.
 2. A triage agent (LangGraph) proposes a label per issue. Each outcome becomes a `Record`.
