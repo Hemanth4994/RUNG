@@ -28,6 +28,13 @@ python scripts/make_synthetic.py            # fake data, only to sanity-check th
 python -m rung.cli data/synthetic.jsonl
 ```
 
+## Run the demo
+`demos/rung_demo.py` runs offline, with no API key and no model call. It prints the cautious upper bound on a few error counts, the stored real reports (development repos and the frozen holdout), and the LangGraph gate pausing for a human on `interrupt` and resuming with `Command(resume=...)`.
+```bash
+pip install -e ".[agent]"
+python demos/rung_demo.py
+```
+
 ## Pipeline commands
 ```bash
 python -m rung.collect owner/repo --max-issues 500 --out data/issues.jsonl      # needs GITHUB_TOKEN
