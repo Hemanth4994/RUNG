@@ -35,6 +35,17 @@ pip install -e ".[agent]"
 python demos/rung_demo.py
 ```
 
+## Run the web page
+`app/rung_app.py` is a Streamlit page over the real code and the stored results in `results/`. It has no model call and needs no key.
+1. *Why a raw error rate is not enough*: type a case count and an error count and see the Wilson upper bound and the auto/review decision.
+2. *The evidence*: the dev and holdout tables. Move the limit in the sidebar to see why 5% was frozen before the holdout was scored (at 10%, `bug` becomes a false promotion).
+3. *Try the gate*: the real LangGraph agent. An `auto` category is applied with no human; anything else pauses (`interrupt`) until you approve, relabel or reject (`Command(resume=...)`). A small keyword stand-in plays the classifier, so it runs offline.
+```bash
+pip install -e ".[agent,app]"
+streamlit run app/rung_app.py
+pytest app -q          # headless tests of the page (Streamlit AppTest)
+```
+
 ## Pipeline commands
 ```bash
 python -m rung.collect owner/repo --max-issues 500 --out data/issues.jsonl      # needs GITHUB_TOKEN
@@ -111,7 +122,7 @@ Notes
 ## Status
 - Tested (78 unit tests): stats, policy, backtest, taxonomy, keyword baseline, walk-forward trained baseline, shadow runner with dedup, gate logic, report CLI, the agent graph (fake classifier), the DuckDB SQL layer (checked for parity with the Python numbers) and the holdout scorer.
 - Run end to end: the collector (live GitHub), the LLM classifier (Gemini Flash-Lite), and the LangGraph agent with human approval and LangSmith tracing.
-- Not built yet: LangSmith dataset and experiments, report page, deployment.
+- Not built yet: LangSmith dataset and experiments, deployment of the web page (it runs locally).
 
 ## Honest limitations
 - Maintainer labels are noisy ground truth, not perfect truth.
